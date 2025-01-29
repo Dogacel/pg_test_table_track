@@ -1,0 +1,4 @@
+# pg_test_table_track.control
+comment = 'Automated cleanup for modified tables after tests'
+default_version = '1.0'
+relocatable = true
