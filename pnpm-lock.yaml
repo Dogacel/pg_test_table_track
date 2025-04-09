@@ -1,0 +1,22 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      markdown-it-admon:
+        specifier: ^1.0.1
+        version: 1.0.1
+
+packages:
+
+  markdown-it-admon@1.0.1:
+    resolution: {integrity: sha512-+slgF0zZQ5908uo+U0cNBY6CUG4ym2GZsOdliDdn6P5doMubfxEZsVW3POaJOzXpd6VXLmn95NYa9Qdp7OMK7Q==}
+
+snapshots:
+
+  markdown-it-admon@1.0.1: {}
