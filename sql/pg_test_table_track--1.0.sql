@@ -5,10 +5,10 @@ BEGIN
  RETURN NEW;
 END $$ LANGUAGE PLPGSQL;
 
-CREATE OR REPLACE FUNCTION setup_access_triggers() RETURNS int AS $$
+CREATE OR REPLACE FUNCTION setup_access_triggers(schemas text[]) RETURNS int AS $$
 DECLARE tables CURSOR FOR
  SELECT table_name, table_schema FROM information_schema.tables
-   WHERE table_schema in ('public', 'netsuite')
+   WHERE table_schema = ANY(schemas)
      AND table_type = 'BASE TABLE' --- Exclude views.
      AND table_name NOT IN ('test_access', 'schema_migrations'); --- Prevent recursion when an insertion happens to 'test_access' table.
 BEGIN
@@ -23,8 +23,9 @@ BEGIN
    EXECUTE 'CREATE TRIGGER "' || stmt.table_name || '_access_trigger"' ||
            ' BEFORE INSERT ON "' || stmt.table_schema ||'"."'|| stmt.table_name || '"' ||
            ' FOR EACH ROW ' ||
-           ' EXECUTE PROCEDURE add_table_to_accessed_list (''"'|| stmt.table_schema ||'"."'|| stmt.table_name ||'"'')';
+           ' EXECUTE PROCEDURE public.add_table_to_accessed_list (''"'|| stmt.table_schema ||'"."'|| stmt.table_name ||'"'')';
  END LOOP;
+RETURN 0;
 END $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION delete_from_accessed_tables() RETURNS int AS $$
@@ -50,12 +51,13 @@ EXECUTE 'SET session_replication_role = ''origin'';';
 RETURN 0;
 END $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION remove_access_triggers() RETURNS int AS $$
+CREATE OR REPLACE FUNCTION remove_access_triggers(schemas text[]) RETURNS int AS $$
 DECLARE tables CURSOR FOR
  SELECT table_name, table_schema FROM information_schema.tables
-   WHERE table_schema in ('public', 'netsuite')
+   WHERE table_schema in ANY(schemas)
      AND table_type = 'BASE TABLE' --- Exclude views.
-     AND table_name NOT IN ('test_access', 'schema_migrations'); --- Prevent recursion when an insertion happens to 'test_access' table.
+     AND table_name NOT IN ('test_access', 'schema_migrations'); 
+     --- Prevent recursion when an insertion happens to 'test_access' table.
 BEGIN
  --- Create a table to store the list of tables that have been accessed.
  EXECUTE 'CREATE TABLE IF NOT EXISTS test_access(table_name varchar(256) not null primary key);';

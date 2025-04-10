@@ -3,12 +3,18 @@
 ## Installation
 
 ### Prerequisites
+
 - PostgreSQL installed (`pg_config` should be available)
 - Git installed
 
 If postgreSQL is installed locally,
+
 ```sh
-   curl -sSL https://raw.githubusercontent.com/dogacel/pg_test_table_track/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/dogacel/pg_test_table_track/main/install.sh | bash
 ```
 
-If postgreSQL is installed inside a docker container, clone the repository and run `install_docker.sh`.
+If postgreSQL is installed inside a docker container,
+
+```sh
+curl -sSL https://raw.githubusercontent.com/dogacel/pg_test_table_track/main/install_docker.sh | bash -s $DB_CONTAINER_NAME $DB_NAME $POSGRES_USER
+```

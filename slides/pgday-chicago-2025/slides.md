@@ -149,6 +149,8 @@ hideInToc: true
   - Foreign keys and dependencies make initialization hard.
   - Re-usable _scenarios_ are created to help developers build tests.
 - No guarantee if tests leave the DB state clean.
+- Wrapping tests in transactions?
+  - Adds unintentional behavior.
 
 
 <div mt-10 />
@@ -411,7 +413,7 @@ hideInToc: true
 
 ## Implementation
 
-```scala{7|17-39|25|41-43}{lines:true, maxHeight:'90%'}
+```scala{7|17-39|20}{lines:true, maxHeight:'90%'}
 // File: WithDBTrait.scala
 
 import org.scalatest.funsuite.AnyFunSuite
@@ -429,27 +431,20 @@ trait CleanDBBetweenTests extends BeforeAndAfterEach with BeforeAndAfterAll { th
  }
 
  def setupFunctions(): Unit = {
-  sql"""
+  """
     CREATE OR REPLACE FUNCTION delete_tables() RETURNS int AS $$
-
-    --- Disable foreign key constraints temporarily. Without this, we need to clear tables in a specific order.
-    --- But it is very hard to find this order and this trick makes the process even faster.
-    --- Because we clear every table, we don't care about any foreign key constraints.
-    EXECUTE 'SET session_replication_role = ''replica'';';
   """ + List("appts", "patients", "practices").map(tableName =>
     """
     BEGIN
       EXECUTE 'DELETE FROM ${tableName}';
-      --- If we accessed a table that is dropped, an exception will occur. This ignored the exception.
       EXCEPTION WHEN OTHERS THEN
     END;
     """
   ).joinToString("\n") + """
       END LOOP;
-    EXECUTE 'SET session_replication_role = ''origin'';';
     RETURN 0;
     END $$ LANGUAGE plpgsql;
-  """
+  """.sql()
  }
 
  def cleanAllTables(): Unit = {
@@ -521,11 +516,11 @@ hideInToc: true
 
 <div mt-10/>
 
-```sql{*|1-8|9-10|11|12-14|15-22|23|24-27|28-32|33-36}{lines: true, maxHeight: '90%'}
-CREATE OR REPLACE FUNCTION setup_access_triggers() RETURNS int AS $$
+```sql{*|1-8|9-10|11|12-14|15-22|23-25}{lines: true, maxHeight: '90%'}
+CREATE OR REPLACE FUNCTION setup_access_triggers(schemas text[]) RETURNS int AS $$
 DECLARE tables CURSOR FOR
  SELECT table_name, table_schema FROM information_schema.tables
-   WHERE table_schema in ('public', 'netsuite')
+   WHERE table_schema = ANY(schemas)
      AND table_type = 'BASE TABLE' --- Exclude views.
      AND table_name NOT IN ('test_access', 'schema_migrations'); 
      --- Prevent recursion when an insertion happens to 'test_access' table.
@@ -534,29 +529,18 @@ BEGIN
  EXECUTE 'CREATE TABLE IF NOT EXISTS test_access(table_name varchar(256) not null primary key);';
  FOR stmt IN tables LOOP
    --- If the trigger exists, first drop it so we can re-create.
-   EXECUTE 'DROP TRIGGER IF EXISTS "' || stmt.table_name || '_access_trigger" ON "' || 
-            stmt.table_schema || '"."'|| stmt.table_name || '"';
+   EXECUTE 'DROP TRIGGER IF EXISTS "' || stmt.table_name || '_access_trigger" ON "' ||
+          stmt.table_schema || '"."'|| stmt.table_name || '"';  
    --- Create the on insert trigger.
    --- This calls `add_table_to_accessed_list` everytime a row is inserted into the table with table name.
    --- The table name also includes the table schema.
    EXECUTE 'CREATE TRIGGER "' || stmt.table_name || '_access_trigger"' ||
            ' BEFORE INSERT ON "' || stmt.table_schema ||'"."'|| stmt.table_name || '"' ||
            ' FOR EACH ROW ' ||
-           ' EXECUTE PROCEDURE add_table_to_accessed_list (''"'||
+           ' EXECUTE PROCEDURE public.add_table_to_accessed_list (''"'||
            stmt.table_schema ||'"."'|| stmt.table_name ||'"'')';
  END LOOP;
- --- Disable foreign key constraints temporarily. Without this, we need to clear tables in a specific order.
- --- But it is very hard to find this order and this trick makes the process even faster.
- --- Because we clear every table, we don't care about any foreign key constraints.
- EXECUTE 'SET session_replication_role = ''replica'';';
- --- Delete all rows from existing tables. This makes sure that the tables are empty before we start the test.
- --- Otherwise some tables might stay with data from previous tests if triggers did not exist before.
- FOR stmt IN tables LOOP
-   EXECUTE 'DELETE FROM "' || stmt.table_schema ||'"."'|| stmt.table_name || '"';
- END LOOP;
- --- Enable foreign key constraints back.
- EXECUTE 'SET session_replication_role = ''origin'';';
- RETURN 0;
+RETURN 0;
 END $$ LANGUAGE plpgsql;
 ```
 
@@ -603,8 +587,13 @@ hideInToc: true
 
 ```scala{*|2,6}{lines: true}
 def clearAccessedTables(): Unit = {
- finishOperation(sql"""SELECT delete_from_accessed_tables()""".as[Int])
+ finishOperation(sql"""SELECT public.delete_from_accessed_tables()""".as[Int])
 }
+
+def setupTestTriggers(): Unit = {
+  finishOperation(sql"""SELECT public.setup_access_triggers(array['test_schema'])""".as[Int])
+}
+
 trait CleanDBBetweenTests extends BeforeAndAfterEach with BeforeAndAfterAll { this: Suite =>
  override def beforeAll(): Unit = {
    setupTestTriggers()
@@ -621,16 +610,49 @@ trait CleanDBBetweenTests extends BeforeAndAfterEach with BeforeAndAfterAll { th
 
 ---
 
+## Installing
+
+Install as a system admin,
+
+```sh
+curl -sSL https://raw.githubusercontent.com/dogacel/pg_test_table_track/main/install.sh | bash
+```
+
+<v-click>
+
+Install for your docker image (_**Recommended**_)
+
+```sh
+❯ curl -sSL https://raw.githubusercontent.com/dogacel/pg_test_table_track/main/install_docker.sh | \
+  bash -s \
+    "$DB_CONTAINER_NAME" \
+    "$DB_NAME" \
+    "$POSTGRES_USER"
+```
+</v-click>
+
+
+<v-click>
+
+<div mt-30/>
+
+> _**Note:**_ PostgreSQL docker containers are encouraged to be used in CI/CD pipelines.
+
+</v-click>
+---
+
 # Future Work
 
 - Support global constant rows.
 
 - Reset sequences, materialized views.
 
+- Unlogged tables
+
 
 ---
 
-# Conclusion
+# Results
 
 We are using this test setup since May 2023 and we haven't faced any isolation or stability issues so far. Only issues were related to tests not extending the `CleanDBTrait`, which is pretty easy to solve.
 
@@ -638,15 +660,24 @@ We are using this test setup since May 2023 and we haven't faced any isolation o
 
 - Our number of tests is growing faster than ever, when we initially implemented this improvement, we only had 6700 test cases.
 
-
 ---
 
 # Final Remarks
 
+Thank you for listening!
+
 <hr/>
 
-Original blog post: [blog.dogac.dev/pg-test-table-track](https://blog.dogac.dev)
+<div mt-10/>
+
+GitHub Repository for PostgreSQL Extension:
+### [Dogacel/pg_test_table_track](https://github.com/Dogacel/pg_test_table_track)
+
+<div mt-20/>
+
+Original blog post:
+### [blog.dogac.dev/pg-test-table-track](https://blog.dogac.dev)
+
+<!-- Add QR Code -->
 
 <!-- https://carbonhealth.com/blog-post/cleaning-postgresql-db-between-integration-tests-efficiently -->
-
-GitHub Repository for PostgreSQL Extension: [Dogacel/pg_test_table_track](https://github.com/Dogacel/pg_test_table_track)
