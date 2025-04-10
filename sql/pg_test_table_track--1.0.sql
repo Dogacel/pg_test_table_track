@@ -22,7 +22,7 @@ BEGIN
    --- The table name also includes the table schema.
    EXECUTE 'CREATE TRIGGER "' || stmt.table_name || '_access_trigger"' ||
            ' BEFORE INSERT ON "' || stmt.table_schema ||'"."'|| stmt.table_name || '"' ||
-           ' FOR EACH ROW ' ||
+           ' FOR EACH STATEMENT ' ||
            ' EXECUTE PROCEDURE public.add_table_to_accessed_list (''"'|| stmt.table_schema ||'"."'|| stmt.table_name ||'"'')';
  END LOOP;
 RETURN 0;

@@ -21,8 +21,8 @@ Doğaç Eldenk
 
 <style>
 #pg {
-  background-color: #2B90B6;
-  background-image: linear-gradient(45deg, #4EC5D4 20%, #146b8c 40%);
+  background-color: #336791;
+  background-image: linear-gradient(45deg, #008bb9 20%, #0064a5 40%);
   background-size: 100%;
   -webkit-background-clip: text;
   -moz-background-clip: text;
@@ -45,17 +45,17 @@ Doğaç Eldenk
 
 # Introduction
 
-I am currently a Senior Software engineer @ Carbon Health.
+I am currently a Senior Software engineer @ Carbon Health since 2020.
 
-- 📝 **Self-taught programmer**
+- Started programming in 2013 to mod games.
 
-- 🎨 **B.S. in Computer Science** @ Bilkent University - Graduated 2022
+- **B.S. in Computer Science** - Bilkent University, Graduated 2022.
 
-- 🧑‍💻 **Open-source contributor** - Armeria, kotlinx, protobuf etc.
+- **Open-source contributor** - Armeria, kotlinx, protobuf etc.
 
-- 🤹 **Platform Engineer** - Working at the Platform team since 2022.
+- **Platform Engineer** - Working at the Platform team since 2022.
 
-- 🎨 **Hobbies** - Running, piano, speedcubing, DIY tech...
+- **Hobbies** - Running, piano, speedcubing, DIY tech...
 
 <style>
 
@@ -219,8 +219,8 @@ import org.scalatest.funsuite.AnyFunSuite
 
 class SimpleSpec extends AnyFunSuite with BeforeAndAfterEach {
 
-  override val beforeEach() = { DBProvider.createFresh() }
-  override val afterEach() = { DBProvider.destroy() }
+  override def beforeEach() = { DBProvider.createFresh() }
+  override def afterEach() = { DBProvider.destroy() }
 
   private val repository = TestDependencies.getDefault[ApptRepository]
 
@@ -387,24 +387,6 @@ trait CleanDBBetweenTests extends BeforeAndAfterEach with BeforeAndAfterAll { th
  }
 }
 ```
-```sql{1|3-6|8-12|14|*}{lines:true}
-    CREATE OR REPLACE FUNCTION delete_tables() RETURNS int AS $$
-
-    --- Disable foreign key constraints temporarily. Without this, we need to clear tables in a specific order.
-    --- But it is very hard to find this order and this trick makes the process even faster.
-    --- Because we clear every table, we don't care about any foreign key constraints.
-    EXECUTE 'SET session_replication_role = ''replica'';';
-
-    BEGIN
-      EXECUTE 'DELETE FROM $TABLE_NAME';
-      --- If we accessed a table that is dropped, an exception will occur. This ignored the exception.
-      EXCEPTION WHEN OTHERS THEN
-    END;
-    END LOOP;
-    EXECUTE 'SET session_replication_role = ''origin'';';
-    RETURN 0;
-    END $$ LANGUAGE plpgsql;
-```
 ````
 
 ---
@@ -536,7 +518,7 @@ BEGIN
    --- The table name also includes the table schema.
    EXECUTE 'CREATE TRIGGER "' || stmt.table_name || '_access_trigger"' ||
            ' BEFORE INSERT ON "' || stmt.table_schema ||'"."'|| stmt.table_name || '"' ||
-           ' FOR EACH ROW ' ||
+           ' FOR EACH STATEMENT ' ||
            ' EXECUTE PROCEDURE public.add_table_to_accessed_list (''"'||
            stmt.table_schema ||'"."'|| stmt.table_name ||'"'')';
  END LOOP;
@@ -647,7 +629,7 @@ Install for your docker image (_**Recommended**_)
 
 - Reset sequences, materialized views.
 
-- Unlogged tables
+- Unlogged tables.
 
 
 ---
@@ -666,18 +648,24 @@ We are using this test setup since May 2023 and we haven't faced any isolation o
 
 Thank you for listening!
 
-<hr/>
+<hr />
 
-<div mt-10/>
+<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 2em;">
 
-GitHub Repository for PostgreSQL Extension:
-### [Dogacel/pg_test_table_track](https://github.com/Dogacel/pg_test_table_track)
+  <div style="flex: 1; padding-right: 2em;">
 
-<div mt-20/>
+  GitHub Repository for PostgreSQL Extension:  
+  ### [Dogacel/pg_test_table_track](https://github.com/Dogacel/pg_test_table_track)
 
-Original blog post:
-### [blog.dogac.dev/pg-test-table-track](https://blog.dogac.dev)
+  <br />
 
-<!-- Add QR Code -->
+  Original blog post:  
+  ### [blog.dogac.dev/pg-test-table-track](https://blog.dogac.dev)
 
-<!-- https://carbonhealth.com/blog-post/cleaning-postgresql-db-between-integration-tests-efficiently -->
+  </div>
+
+  <div style="flex: 0 0 auto; margin-right: 3em;">
+    <img src="/images/qr.webp" alt="QR Code" style="width: 300px;" />
+  </div>
+
+</div>
