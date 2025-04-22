@@ -36,6 +36,8 @@ Doğaç Eldenk
 </style>
 
 ---
+hide: true
+---
 
 # Table of contents
 
@@ -161,6 +163,12 @@ hideInToc: true
 1. Clean all tables
 1. ??? (Our solution)
 
+<!--
+Transactions rollback when you face an error, so you lose your entire state when you see an exceptions.
+I heard rake also wraps with transactions.
+PostgreSQL supports nested transactions (SAVEPOINT), but not enough. 
+-->
+
 </v-clicks> 
 
 ---
@@ -181,6 +189,9 @@ First glance, it sounds like re-creating the DB before each test would be a good
 
 - Each test is fully isolated.
 
+<!--
+Microservices can use it easily.
+-->
 
 
 ---
@@ -188,7 +199,7 @@ First glance, it sounds like re-creating the DB before each test would be a good
 ## Implementation
 
 ````md magic-move
-```scala{*}{lines:true}
+```scala{*|15|*}{lines:true}
 // File: SimpleSpec.scala
 
 import org.scalatest.funsuite.AnyFunSuite
@@ -203,6 +214,7 @@ class SimpleSpec extends AnyFunSuite {
   }
 
   test("Inserts and fetches a row") {
+    ApptSmartFixtures.setup(sampleAppt)
     repository.add(sampleAppt)
     val result = repository.query(id = sampleAppt.id)
 
@@ -312,6 +324,12 @@ class SimpleSpec extends AnyFunSuite with CleanDBBetweenTests {
 ```
 ````
 
+<!--
+This is a sample spec.
+Sometimes we need to have data in our database. However adding a row is not simple, as it has many external dependencies or foreign key constraints.
+Therefore we invented "smart-fixtures", a tree-like structure that appends the required dependencies in order. Those smart fixtures ensure we can quickly setup our test environment on top of a clean DB.
+-->
+
 ---
 
 ## Cons
@@ -328,6 +346,10 @@ class SimpleSpec extends AnyFunSuite with CleanDBBetweenTests {
 
 > __*__ Combined with 9000+ tests in total, only initialization takes a little over <span v-mark.underline.red="-1"> 1 hour </span>.
 </v-click>
+
+<!--
+We don't want to sacrifice stability, as smart fixtures work well only with a clean DB.
+-->
 
 
 ---
@@ -389,6 +411,11 @@ trait CleanDBBetweenTests extends BeforeAndAfterEach with BeforeAndAfterAll { th
 ```
 ````
 
+<!--
+This initial implementation was like this.
+However sending each SQL command one by one turns out to be slow.
+-->
+
 ---
 hideInToc: true
 ---
@@ -435,11 +462,15 @@ trait CleanDBBetweenTests extends BeforeAndAfterEach with BeforeAndAfterAll { th
 }
 ```
 
+<!--
+An idea is to create a PL/pgsql function to send all delete commands in one command. Technically this should reduce time spent based on our previous experiments.
+-->
+
 ---
 
 # Final Solution
 
-Before starting to explain the solution we have came up with, let's visit what we have learned so far.
+We have created a solution that we use for the last 2 years without any issues. Before starting to explain the solution we have came up with, let's visit what we have learned so far.
 
 - Before each test, our tables should be fresh.
 
@@ -456,6 +487,10 @@ Before starting to explain the solution we have came up with, let's visit what w
 > What if we record the tables that are used and wipe only them?
 
 </v-click>
+
+<!--
+We will combine some ideas and approaches previously demonstrated and use what PostgreSQL provides to increase efficiency of test cleanup. 
+-->
 
 ---
 
@@ -525,6 +560,13 @@ BEGIN
 RETURN 0;
 END $$ LANGUAGE plpgsql;
 ```
+
+<!--
+Some assumptions, 
+- We don't create tables in our codebase. 
+- We don't care about auto-increment columns. 
+- We don't have materialized views.
+-->
 
 ---
 hideInToc: true
@@ -621,6 +663,11 @@ Install for your docker image (_**Recommended**_)
 > _**Note:**_ PostgreSQL docker containers are encouraged to be used in CI/CD pipelines.
 
 </v-click>
+
+<!--
+Making installation easy is important for adaptation, that's our observation on our developers.
+-->
+
 ---
 
 # Future Work
@@ -631,6 +678,19 @@ Install for your docker image (_**Recommended**_)
 
 - Unlogged tables.
 
+<v-click>
+
+### Additional Sources
+
+- [**pgtestdb**](https://github.com/peterldowns/pgtestdb): Golang library to create fresh databases from templates.
+
+- [**pgtap**](https://pgtap.org/): A suite of database functions to write _TAP_ emitting unit tests.
+
+- [**Blog: The argument against clearing the database between tests**](https://calpaterson.com/against-database-teardown.html)
+
+- [**Blog: Testing with Go and PostgreSQL: ephemeral DBs**](https://michael.stapelberg.ch/posts/2024-11-19-testing-with-go-and-postgresql-ephemeral-dbs/)
+
+</v-click>
 
 ---
 
@@ -641,6 +701,18 @@ We are using this test setup since May 2023 and we haven't faced any isolation o
 - We have seen a reduction of around 30% in our CI runtimes. 
 
 - Our number of tests is growing faster than ever, when we initially implemented this improvement, we only had 6700 test cases.
+
+<v-click>
+
+  <img src="/images/ci_result_now.png" alt="CI test results" style="height: 300px;" />
+
+</v-click>
+
+<!--
+Initial speed up was much higher, however it still makes a huge difference today, around 20%.
+Stability and speed of of CI tests greately improve developer efficiency.
+Integration tests are more encouraged, resulting in catching production bugs and incident early on.
+-->
 
 ---
 
@@ -660,12 +732,16 @@ Thank you for listening!
   <br />
 
   Original blog post:  
-  ### [blog.dogac.dev/pg-test-table-track](https://blog.dogac.dev)
+  ### [blog.dogac.dev/pg-test-table-track](https://blog.dogac.dev/pg-test-table-track)
 
   </div>
 
   <div style="flex: 0 0 auto; margin-right: 3em;">
-    <img src="/images/qr.webp" alt="QR Code" style="width: 300px;" />
+    <img src="/images/qr.png" alt="QR Code" style="width: 300px;" />
   </div>
+
+<!--
+Please leave any feedbacks & comments on GitHub.
+-->
 
 </div>
